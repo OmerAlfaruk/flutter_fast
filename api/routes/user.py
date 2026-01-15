@@ -1,16 +1,35 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
-from api.schemas.user import userBaseSchema
-from api.models.models import UserModel
-from api.config.db import database
+from schemas.user import userBaseSchema
+from models.models import UserModel
+from config.db import get_db
 
 user = APIRouter()
+
+
 @user.post("/users/")
-async def create_user(user: userBaseSchema):
-    query = UserModel.insert().values(
-        username=user.username,
-        email=user.email,
-        password=user.password
-    )
-    last_record_id = await database.execute(query)
-    return {**user.dict(), "id": last_record_id}
+def create_user(user: userBaseSchema, db: Session = Depends(get_db)):
+    db_user = UserModel(username=user.username, email=user.email, password=user.password)
+
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return {"id": db_user.id, "username": db_user.username, "email": db_user.email}
+
+
+@user.get("auth/login")
+def login(user:userBaseSchema,db:Session=Depends(get_db)):
+    db_user=db.query(UserModel).filter(UserModel.email==user.email)
+
+    isMatch=user.password==db_user.email
+
+    if not isMatch:
+        raise Exception("Incorrect Password")
+    
+    return db_user
+
+
+    
+ 
+
